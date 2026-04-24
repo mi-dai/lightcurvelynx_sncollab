@@ -78,6 +78,9 @@ target/
 # Jupyter Notebook
 .ipynb_checkpoints
 
+# Downloaded survey data (OpSim DBs, passbands, etc.) — can be large
+data/
+
 # IPython
 profile_default/
 ipython_config.py
