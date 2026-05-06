@@ -24,6 +24,7 @@ import argparse
 import matplotlib
 matplotlib.use("Agg")  # headless; no display required
 import matplotlib.pyplot as plt
+import loky
 import numpy as np
 import yaml
 from scipy.interpolate import interp1d
@@ -42,8 +43,6 @@ from lightcurvelynx.models.sncosmo_models import SncosmoWrapperModel
 from lightcurvelynx.obstable.opsim import OpSim
 from lightcurvelynx.simulate import simulate_lightcurves
 from lightcurvelynx.utils.extrapolate import LinearDecayOnMag, ZeroPadding
-
-from sim_pdfs import make_asymmetric_gaussian_pdf
 
 
 def load_config(path: str) -> dict:
@@ -171,18 +170,20 @@ def main() -> None:
     # Redshift drawn from volumetric rate PDF
     z_func = SamplePDF(zpdf, node_label="redshift")
 
-    # Asymmetric Gaussian SALT3 priors — built via functools.partial over a
-    # module-level function (sim_pdfs.py) so they survive pickling on macOS spawn.
-    x1_pdf = make_asymmetric_gaussian_pdf(
-        mu=cfg["x1_mean"],
-        sigma_minus=cfg["x1_sigma_minus"],
-        sigma_plus=cfg["x1_sigma_plus"],
-    )
-    c_pdf = make_asymmetric_gaussian_pdf(
-        mu=cfg["c_mean"],
-        sigma_minus=cfg["c_sigma_minus"],
-        sigma_plus=cfg["c_sigma_plus"],
-    )
+    # Asymmetric Gaussian SALT3 priors — loky uses cloudpickle so plain closures work.
+    def asymmetric_gaussian_pdf(x, mu, sigma_minus, sigma_plus):
+        norm_factor = np.sqrt(2 / np.pi) / (sigma_minus + sigma_plus)
+        return np.where(
+            x < mu,
+            norm_factor * np.exp(-0.5 * ((x - mu) / sigma_minus) ** 2),
+            norm_factor * np.exp(-0.5 * ((x - mu) / sigma_plus) ** 2),
+        )
+
+    def x1_pdf(x):
+        return asymmetric_gaussian_pdf(x, cfg["x1_mean"], cfg["x1_sigma_minus"], cfg["x1_sigma_plus"])
+
+    def c_pdf(c):
+        return asymmetric_gaussian_pdf(c, cfg["c_mean"], cfg["c_sigma_minus"], cfg["c_sigma_plus"])
     x1_func = SamplePDF(x1_pdf, node_label="x1")
     c_func = SamplePDF(c_pdf, node_label="c")
     m_abs_func = NumpyRandomFunc("normal", loc=cfg["m_abs_mean"], scale=cfg["m_abs_sigma"])
@@ -225,6 +226,7 @@ def main() -> None:
         "source.dec",
         "x0_func.distmod",
     ]
+    executor = loky.get_reusable_executor(max_workers=cfg["num_jobs"])
     results = simulate_lightcurves(
         model=source,
         num_samples=nsn,
@@ -233,7 +235,7 @@ def main() -> None:
         param_cols=param_cols,
         obstable_save_cols=["zp"],
         rng=rng,
-        num_jobs=cfg["num_jobs"],
+        executor=executor,
         batch_size=cfg["batch_size"],
     )
     print(f"Simulated {len(results):,} SNe Ia")
