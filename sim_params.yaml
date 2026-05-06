@@ -1,0 +1,43 @@
+# RNG seed for reproducibility
+seed: 1024
+
+# --- Cosmology ---
+H0: 70.0
+Omega_m: 0.315
+w: -1.0
+
+# --- Redshift range ---
+zmin: 0.001
+zmax: 0.7
+znbins: 100
+
+# --- Tripp relation coefficients ---
+alpha: 0.15
+beta: 3.15
+
+# --- SALT3 stretch (x1) asymmetric Gaussian priors ---
+x1_mean: 0.973
+x1_sigma_minus: 1.472
+x1_sigma_plus: 0.222
+
+# --- SALT3 colour (c) asymmetric Gaussian priors ---
+c_mean: -0.054
+c_sigma_minus: 0.043
+c_sigma_plus: 0.101
+
+# --- Absolute magnitude prior ---
+m_abs_mean: -19.3
+m_abs_sigma: 0.1
+
+# --- Survey ---
+filters: [u, g, r, i, z, y]
+sky_coverage: -1    # deg²; -1 = estimate from OpSim footprint at runtime
+tmin: 60960         # MJD survey start
+tmax: 62786         # MJD survey end
+
+# --- Pipeline runtime settings ---
+opsim_db: data/opsim/baseline_v5.0.0_LSST_ELAISS1_5yr.db
+output_path: output/lsst_snia_results.parquet
+num_jobs: 4
+batch_size: 2000
+nsn: -1             # -1 = estimate from volumetric rate integration; positive int = use directly
