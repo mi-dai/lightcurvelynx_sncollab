@@ -40,4 +40,4 @@ opsim_db: data/opsim/baseline_v5.0.0_LSST_ELAISS1_5yr.db
 output_path: output/lsst_snia_results.parquet
 num_jobs: 4
 batch_size: 2000
-nsn: -1             # -1 = estimate from volumetric rate integration; positive int = use directly
+nsn: 100             # -1 = estimate from volumetric rate integration; positive int = use directly
