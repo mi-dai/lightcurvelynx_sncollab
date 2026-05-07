@@ -6,6 +6,7 @@ lightcurvelynx + SALT3 via sncosmo.
 
 Usage:
     python lsst_snia_pipeline.py [--config sim_params.yaml] [--output path.parquet] [--plots]
+                                 [--parallel-executor {loky,dask,none}]
 """
 
 # --- 0. Environment setup ---
@@ -24,7 +25,6 @@ import argparse
 import matplotlib
 matplotlib.use("Agg")  # headless; no display required
 import matplotlib.pyplot as plt
-import loky
 import numpy as np
 import yaml
 from scipy.interpolate import interp1d
@@ -115,6 +115,9 @@ def main() -> None:
                         help="Override output parquet path from config")
     parser.add_argument("--plots", action="store_true",
                         help="Save diagnostic plots to output/plots/")
+    parser.add_argument("--parallel-executor", default="dask",
+                        choices=["loky", "dask", "none"],
+                        help="Parallel executor backend (default: dask)")
     args = parser.parse_args()
 
     # --- 2. Load config ---
@@ -170,7 +173,7 @@ def main() -> None:
     # Redshift drawn from volumetric rate PDF
     z_func = SamplePDF(zpdf, node_label="redshift")
 
-    # Asymmetric Gaussian SALT3 priors — loky uses cloudpickle so plain closures work.
+    # Asymmetric Gaussian SALT3 priors — plain closures work with both loky and dask.
     def asymmetric_gaussian_pdf(x, mu, sigma_minus, sigma_plus):
         norm_factor = np.sqrt(2 / np.pi) / (sigma_minus + sigma_plus)
         return np.where(
@@ -226,8 +229,7 @@ def main() -> None:
         "source.dec",
         "x0_func.distmod",
     ]
-    executor = loky.get_reusable_executor(max_workers=cfg["num_jobs"])
-    results = simulate_lightcurves(
+    sim_kwargs = dict(
         model=source,
         num_samples=nsn,
         obstable=opsim,
@@ -235,9 +237,20 @@ def main() -> None:
         param_cols=param_cols,
         obstable_save_cols=["zp"],
         rng=rng,
-        executor=executor,
         batch_size=cfg["batch_size"],
     )
+    parallel_executor = args.parallel_executor
+    if parallel_executor == "dask":
+        import dask.distributed
+        with dask.distributed.Client() as client:
+            print(f"Dask dashboard: {client.dashboard_link}")
+            results = simulate_lightcurves(**sim_kwargs, executor=client)
+    elif parallel_executor == "loky":
+        import loky
+        executor = loky.get_reusable_executor(max_workers=cfg["num_jobs"])
+        results = simulate_lightcurves(**sim_kwargs, executor=executor)
+    else:
+        results = simulate_lightcurves(**sim_kwargs, executor=None)
     print(f"Simulated {len(results):,} SNe Ia")
 
     # --- 10. Save results ---
