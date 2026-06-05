@@ -39,6 +39,8 @@ from lightcurvelynx.astro_utils.snia_utils import (
 from lightcurvelynx.math_nodes.np_random import NumpyRandomFunc
 from lightcurvelynx.math_nodes.ra_dec_sampler import ApproximateMOCSampler
 from lightcurvelynx.math_nodes.scipy_random import SamplePDF
+from lightcurvelynx.astro_utils.dustmap import SFDMap
+from lightcurvelynx.effects.extinction import ExtinctionEffect
 from lightcurvelynx.models.sncosmo_models import SncosmoWrapperModel
 from lightcurvelynx.obstable.opsim import OpSim
 from lightcurvelynx.simulate import simulate_lightcurves
@@ -217,6 +219,21 @@ def main() -> None:
         time_extrapolation=(ZeroPadding(), LinearDecayOnMag(decay_rate=0.02, mag_thres=30.0)),
         wave_extrapolation=(ZeroPadding(), ZeroPadding()),
     )
+
+    # Milky Way dust extinction from SFD map
+    mwextinction = SFDMap(
+        ra=source.ra,
+        dec=source.dec,
+        node_label="mwext",
+    )
+    ext_effect = ExtinctionEffect(
+        extinction_model="F99",
+        ebv=mwextinction,
+        r_v=3.1,
+        frame="observer",
+        backend="dust_extinction",
+    )
+    source.add_effect(ext_effect)
 
     # --- 9. Run simulation ---
     param_cols = [
