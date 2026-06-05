@@ -39,12 +39,23 @@ from lightcurvelynx.astro_utils.snia_utils import (
 from lightcurvelynx.math_nodes.np_random import NumpyRandomFunc
 from lightcurvelynx.math_nodes.ra_dec_sampler import ApproximateMOCSampler
 from lightcurvelynx.math_nodes.scipy_random import SamplePDF
-from lightcurvelynx.astro_utils.dustmap import SFDMap
+from lightcurvelynx.astro_utils.dustmap import DustmapWrapper, SFDMap
 from lightcurvelynx.effects.extinction import ExtinctionEffect
 from lightcurvelynx.models.sncosmo_models import SncosmoWrapperModel
 from lightcurvelynx.obstable.opsim import OpSim
 from lightcurvelynx.simulate import simulate_lightcurves
 from lightcurvelynx.utils.extrapolate import LinearDecayOnMag, ZeroPadding
+
+
+def build_dustmap(name: str, ra, dec):
+    """Return a dust E(B-V) node for the given dustmap backend."""
+    if name == "sfdmap2":
+        return SFDMap(ra=ra, dec=dec, node_label="mwext")
+    elif name == "dustmap_sfd":
+        from dustmaps.sfd import SFDQuery
+        return DustmapWrapper(SFDQuery(), ra=ra, dec=dec, node_label="mwext")
+    else:
+        raise ValueError(f"Unknown dustmap: {name!r}. Choose 'sfdmap2' or 'dustmap_sfd'.")
 
 
 def load_config(path: str) -> dict:
@@ -120,12 +131,18 @@ def main() -> None:
     parser.add_argument("--parallel-executor", default="dask",
                         choices=["loky", "dask", "none"],
                         help="Parallel executor backend (default: dask)")
+    parser.add_argument("--dustmap", default=None,
+                        choices=["sfdmap2", "dustmap_sfd"],
+                        help="Dust map backend (default: from config, fallback sfdmap2)")
     args = parser.parse_args()
 
     # --- 2. Load config ---
     cfg = load_config(args.config)
     if args.output:
         cfg["output_path"] = args.output
+    if args.dustmap:
+        cfg["dustmap"] = args.dustmap
+    cfg.setdefault("dustmap", "sfdmap2")
 
     rng = np.random.default_rng(cfg["seed"])
 
@@ -220,12 +237,9 @@ def main() -> None:
         wave_extrapolation=(ZeroPadding(), ZeroPadding()),
     )
 
-    # Milky Way dust extinction from SFD map
-    mwextinction = SFDMap(
-        ra=source.ra,
-        dec=source.dec,
-        node_label="mwext",
-    )
+    # Milky Way dust extinction
+    print(f"Dust map: {cfg['dustmap']}")
+    mwextinction = build_dustmap(cfg["dustmap"], ra=source.ra, dec=source.dec)
     ext_effect = ExtinctionEffect(
         extinction_model="F99",
         ebv=mwextinction,
@@ -249,7 +263,7 @@ def main() -> None:
     sim_kwargs = dict(
         model=source,
         num_samples=nsn,
-        obstable=opsim,
+        survey_info=opsim,
         passbands=passbands,
         param_cols=param_cols,
         obstable_save_cols=["zp"],
