@@ -36,8 +36,8 @@ tmin: 60960         # MJD survey start
 tmax: 62786         # MJD survey end
 
 # --- Pipeline runtime settings ---
-dustmap: sfdmap2        # sfdmap2 | dustmap_sfd
-opsim_db: data/opsim/baseline_v5.0.0_LSST_ELAISS1_5yr.db
+dustmap: dustmap_sfd        # sfdmap2 | dustmap_sfd
+opsim_db: $SNCV/shared_inputs/OpSims/baseline_v5.0.0_LSST_ELAISS1_5yr.db
 output_path: output/lsst_snia_results.parquet
 num_jobs: 4
 batch_size: 2000

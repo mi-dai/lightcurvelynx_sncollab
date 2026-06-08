@@ -147,7 +147,8 @@ def main() -> None:
     rng = np.random.default_rng(cfg["seed"])
 
     # --- 3. Load LSST OpSim schedule ---
-    opsim = OpSim.from_db(cfg["opsim_db"])
+    opsim_path = os.path.expandvars(cfg["opsim_db"])
+    opsim = OpSim.from_db(opsim_path)
     print(f"OpSim loaded: {len(opsim):,} observations")
     print(f"MJD range: {opsim['time'].min():.1f} – {opsim['time'].max():.1f}")
 
